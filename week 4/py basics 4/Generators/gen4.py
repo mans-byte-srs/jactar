@@ -1,0 +1,5 @@
+def countdown(n):
+    while n > 0:
+        yield n
+        n -= 1
+print(*(countdown(5)))
