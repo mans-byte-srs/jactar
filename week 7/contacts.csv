@@ -1,0 +1,21 @@
+import csv
+def insert_from_csv():
+    conn = connect()
+    cur = conn.cursor()
+
+    with open("contacts.csv", "r", encoding="utf-8") as file:
+        reader = csv.DictReader(file)
+        for row in reader:
+            try:
+                cur.execute(
+                    "INSERT INTO phonebook (name, phone) VALUES (%s, %s)",
+                    (row["name"], row["phone"])
+                )
+            except:
+                print("Skipped:", row)
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    print("CSV imported!")
