@@ -1,12 +1,12 @@
-import pygame
+import os
+import pygame  
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 from clock import get_time_angles, rotate_hand
 
 pygame.init()
 screen = pygame.display.set_mode((800, 800))
 pygame.display.set_caption("Mickey's Clock")
 
-# Суреттерді жүктеу (аттары мен папкасы дұрыс болуы керек)
-# images/ папкасында осы файлдар тұруы тиіс
 body = pygame.image.load('images/mickey_body.png')
 hand = pygame.image.load('images/mickey_hand.png')
 

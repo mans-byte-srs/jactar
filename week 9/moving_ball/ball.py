@@ -5,7 +5,7 @@ class Ball:
         self.radius = radius
         self.screen_width = width
         self.screen_height = height
-        self.speed = 20
+        self.speed = 80
 
     def move(self, dx, dy):
         # Жаңа позицияны есептеу

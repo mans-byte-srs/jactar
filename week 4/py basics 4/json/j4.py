@@ -5,4 +5,4 @@ def outer():
         count += 1
     inner()
     return count
-print(outer()) # 6
+print(outer()) # 6 
