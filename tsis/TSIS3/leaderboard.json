@@ -1,52 +1,32 @@
 [
-  {
-    "name": "AZAMAT",
-    "score": 1650,
-    "distance": 100
-  },
-  {
-    "name": "AZAMAT",
-    "score": 1590,
-    "distance": 100
-  },
-  {
-    "name": "AZAMAT",
-    "score": 1214,
-    "distance": 103
-  },
-  {
-    "name": "AZAMAT",
-    "score": 932,
-    "distance": 84
-  },
-  {
-    "name": "AZAMAT",
-    "score": 781,
-    "distance": 75
-  },
-  {
-    "name": "AZAMAT",
-    "score": 588,
-    "distance": 49
-  },
-  {
-    "name": "AZAMAT",
-    "score": 528,
-    "distance": 51
-  },
-  {
-    "name": "AZAMAT",
-    "score": 470,
-    "distance": 41
-  },
-  {
-    "name": "AZAMAT",
-    "score": 453,
-    "distance": 36
-  },
-  {
-    "name": "AZAMAT",
-    "score": 449,
-    "distance": 34
-  }
+    {
+        "name": "Player",
+        "score": 64,
+        "distance": 108
+    },
+    {
+        "name": "Player",
+        "score": 12,
+        "distance": 25
+    },
+    {
+        "name": "Player",
+        "score": 11,
+        "distance": 24
+    },
+    {
+        "name": "Player",
+        "score": 11,
+        "distance": 27
+    },
+    {
+        "name": "Player",
+        "score": 7,
+        "distance": 16
+    },
+    {
+        "name": "Player",
+        "score": 1,
+        "distance": 10
+    }
 ]

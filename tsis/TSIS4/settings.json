@@ -1,10 +1,9 @@
 {
-  "snake_color": [
-    0,
-    220,
-    0
-  ],
-  "grid": true,
-  "sound": true,
-  "username": "AZAMAT"
+    "snake_color": [
+        255,
+        180,
+        0
+    ],
+    "grid": true,
+    "sound": true
 }

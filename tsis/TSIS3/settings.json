@@ -1,6 +1,5 @@
 {
-  "sound": true,
-  "car_color": "yellow",
-  "difficulty": "normal",
-  "username": "AZAMAT"
+    "sound": true,
+    "difficulty": "normal",
+    "car_color": "blue"
 }

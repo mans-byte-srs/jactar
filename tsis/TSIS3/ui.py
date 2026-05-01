@@ -1,78 +1,205 @@
 import pygame
-
-WHITE      = (255, 255, 255)
-BLACK      = (0,   0,   0  )
-GRAY       = (180, 180, 180)
-DARK_GRAY  = (80,  80,  80 )
-BLUE       = (50,  120, 220)
-LIGHT_BLUE = (100, 160, 255)
-RED        = (220, 50,  50 )
-GREEN      = (50,  180, 80 )
-YELLOW     = (255, 220, 0  )
-
-pygame.font.init()
-font       = pygame.font.SysFont("Arial", 22)
-font_large = pygame.font.SysFont("Arial", 48, bold=True)
-font_small = pygame.font.SysFont("Arial", 16)
+from persistence import load_leaderboard
 
 
-def draw_button(surface, rect, text, active=False):
-    mouse = pygame.mouse.get_pos()
-    hover = rect.collidepoint(mouse)
-    color = LIGHT_BLUE if (hover or active) else BLUE
-    pygame.draw.rect(surface, color, rect, border_radius=8)
-    pygame.draw.rect(surface, WHITE, rect, 2, border_radius=8)
-    lbl = font.render(text, True, WHITE)
-    surface.blit(lbl, lbl.get_rect(center=rect.center))
-    return hover
+# --- Загрузка фоновых изображений ---
+
+menu_bg = pygame.image.load(
+    "assets/menu_bg.png"
+)
+
+settings_bg = pygame.image.load(
+    "assets/settings_bg.png"
+)
+
+leaderboard_bg = pygame.image.load(
+    "assets/leaderboard_bg.png"
+)
+
+# растянуть под размер окна
+
+menu_bg = pygame.transform.scale(
+    menu_bg,
+    (400, 600)
+)
+
+settings_bg = pygame.transform.scale(
+    settings_bg,
+    (400, 600)
+)
+
+leaderboard_bg = pygame.transform.scale(
+    leaderboard_bg,
+    (400, 600)
+)
+
+WHITE = (230, 230, 230)
+BLACK = (0, 0, 0)
+REDDER=(100,0,0)
+GREY=(150,150,150)
+BLUE=(0,0,90)
+GREEN=(0,60,0)
 
 
-def button_clicked(rect, event):
-    return (event.type == pygame.MOUSEBUTTONDOWN and
-            event.button == 1 and
-            rect.collidepoint(event.pos))
+def get_font():
+
+    return pygame.font.SysFont(
+        "Verdana",
+        20,
+        bold=True
+    )
+
+def draw_text(screen, text, x, y):
+
+    font = get_font()
+
+    screen.blit(
+        font.render(
+            text,
+            True,
+            GREY
+        ),
+        (x, y)
+    )
 
 
-def draw_text(surface, text, x, y, color=WHITE, big=False, center=False):
-    f = font_large if big else font
-    lbl = f.render(text, True, color)
-    if center:
-        x = x - lbl.get_width() // 2
-    surface.blit(lbl, (x, y))
 
 
-def draw_title(surface, title, screen_width, y=40):
-    lbl = font_large.render(title, True, YELLOW)
-    surface.blit(lbl, (screen_width // 2 - lbl.get_width() // 2, y))
+def draw_menu(screen):
+
+    screen.blit(menu_bg, (0, 0))
+
+    draw_text(
+        screen,
+        "1 - Play",
+        30,
+        270
+    )
+
+    draw_text(
+        screen,
+        "2 - Leaderboard",
+        30,
+        320
+    )
+
+    draw_text(
+        screen,
+        "3 - Settings",
+        30,
+        370
+    )
+
+    
+
+def draw_settings(screen, settings):
+
+    screen.blit(settings_bg, (0, 0))
+
+    draw_text(
+        screen,
+        f"Sound: {settings['sound']}",
+        30,
+        250
+    )
+
+    draw_text(
+        screen,
+        "S - Toggle sound",
+        30,
+        300
+    )
+
+    draw_text(
+        screen,
+        "ESC - Back",
+        30,
+        500
+    )
 
 
-def text_input_screen(surface, clock, screen_width, screen_height, prompt):
-    user_text = ""
-    box = pygame.Rect(screen_width // 2 - 150, screen_height // 2, 300, 45)
+def draw_leaderboard(screen):
 
-    while True:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                import sys; sys.exit()
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_RETURN and user_text.strip():
-                    return user_text.strip()
-                elif event.key == pygame.K_BACKSPACE:
-                    user_text = user_text[:-1]
-                elif len(user_text) < 18 and event.unicode.isprintable():
-                    user_text += event.unicode
+    screen.blit(leaderboard_bg, (0, 0))
 
-        surface.fill((30, 30, 60))
-        draw_title(surface, "Enter Your Name", screen_width, 160)
-        lbl = font.render(prompt, True, GRAY)
-        surface.blit(lbl, (screen_width // 2 - lbl.get_width() // 2,
-                            screen_height // 2 - 50))
-        pygame.draw.rect(surface, WHITE, box, 2, border_radius=6)
-        name_lbl = font.render(user_text + "|", True, YELLOW)
-        surface.blit(name_lbl, (box.x + 8, box.y + 8))
-        hint = font_small.render("Press Enter to confirm", True, GRAY)
-        surface.blit(hint, (screen_width // 2 - hint.get_width() // 2,
-                             box.bottom + 12))
-        pygame.display.flip()
-        clock.tick(60)
+    data = load_leaderboard()
+
+    y = 180
+
+    for i, row in enumerate(data):
+
+        text = (
+            f"{i+1}. "
+            f"{row['name']}  "
+            f"Score:{row['score']}  "
+            f"Dist:{row['distance']}"
+        )
+
+        draw_text(
+            screen,
+            text,
+            40,
+            y
+        )
+
+        y += 30
+
+    draw_text(
+        screen,
+        "ESC - Back",
+        10,
+        700
+    )
+
+
+def draw_game_over(screen, score, distance):
+
+    # загрузка картинки
+    img = pygame.image.load(
+        "assets/game_over.png"
+    ).convert()
+
+    # растянуть под размер окна
+    img = pygame.transform.scale(
+        img,
+        (400, 600)
+    )
+
+    # нарисовать фон
+    screen.blit(img, (0, 0))
+
+    # текст поверх картинки
+
+    font = pygame.font.SysFont(
+        "Verdana",
+        20
+    )
+
+    text1 = font.render(
+        f"Score: {score}",
+        True,
+        (255, 255, 255)
+    )
+
+    text2 = font.render(
+        f"Distance: {distance}",
+        True,
+        (255, 255, 255)
+    )
+
+    text3 = font.render(
+        "R - Retry",
+        True,
+        (255, 255, 255)
+    )
+
+    text4 = font.render(
+        "M - Menu",
+        True,
+        (255, 255, 255)
+    )
+
+    screen.blit(text1, (120, 260))
+    screen.blit(text2, (110, 300))
+    screen.blit(text3, (140, 380))
+    screen.blit(text4, (140, 420))

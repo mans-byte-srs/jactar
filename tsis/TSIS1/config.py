@@ -1,5 +1,6 @@
-DB_HOST = "localhost"
-DB_PORT = 5432
-DB_NAME = "phonebook_db"
-DB_USER = "postgres"
-DB_PASSWORD = "12345678"
+DB_CONFIG={
+    "host":"localhost",
+    "database": "phonebook1",
+    "user":"postgres",
+    "password": "12345678"
+}

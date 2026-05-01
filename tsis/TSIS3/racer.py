@@ -1,251 +1,360 @@
 import pygame
 import random
 
-# Road geometry (same as practice files)
-SCREEN_WIDTH  = 400
-SCREEN_HEIGHT = 600
-ROAD_WIDTH    = 300
-LANE_WIDTH    = ROAD_WIDTH // 3
-ROAD_LEFT     = (SCREEN_WIDTH - ROAD_WIDTH) // 2
-ROAD_RIGHT    = ROAD_LEFT + ROAD_WIDTH
-
-# Colors
-WHITE  = (255, 255, 255)
-BLACK  = (0,   0,   0  )
-RED    = (255, 50,  50 )
-GREEN  = (50,  200, 50 )
-BLUE   = (50,  100, 255)
-YELLOW = (255, 220, 0  )
-GRAY   = (128, 128, 128)
-ORANGE = (255, 165, 0  )
-BRONZE = (205, 127, 50 )
-SILVER = (192, 192, 192)
-GOLD   = (255, 215, 0  )
-DARK   = (40,  40,  40 )
-
-CAR_COLORS = {
-    "green":  GREEN,
-    "blue":   BLUE,
-    "yellow": YELLOW,
-}
-
-pygame.font.init()
-small_font = pygame.font.SysFont("Arial", 13, bold=True)
+LANES = [60, 150, 250, 335]
 
 
-def lane_center(lane):
-    """Return the x-center pixel of a lane (0-2)."""
-    return ROAD_LEFT + LANE_WIDTH // 2 + lane * LANE_WIDTH
+def load(file, size):
 
-class Player(pygame.sprite.Sprite):
+    return pygame.transform.scale(
+        pygame.image.load(file).convert_alpha(),
+        size
+    )
 
-    def __init__(self, color_name="green"):
-        super().__init__()
-        color = CAR_COLORS.get(color_name, GREEN)
-        self.image = pygame.Surface((40, 70), pygame.SRCALPHA)
-        self.image.fill(color)
-        pygame.draw.rect(self.image, BLACK, (5,  10, 30, 15))  # windshield
-        pygame.draw.rect(self.image, BLACK, (0,   5, 10, 15))  # FL wheel
-        pygame.draw.rect(self.image, BLACK, (30,  5, 10, 15))  # FR wheel
-        pygame.draw.rect(self.image, BLACK, (0,  50, 10, 15))  # BL wheel
-        pygame.draw.rect(self.image, BLACK, (30, 50, 10, 15))  # BR wheel
 
-        self.rect = self.image.get_rect()
-        self.rect.centerx = SCREEN_WIDTH // 2
-        self.rect.bottom   = SCREEN_HEIGHT - 20
-        self.base_speed    = 5
-        self.speed         = self.base_speed
+def load_assets(W, H):
 
-        # Power-up state
-        self.shield   = False
-        self.nitro    = False
-        self.nitro_timer  = 0    # frames remaining
-        self.shield_hits  = 0   # hits absorbed
+    assets = {}
 
-    def move(self):
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_LEFT]  or keys[pygame.K_a]:
-            self.rect.move_ip(-self.speed, 0)
-        if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
-            self.rect.move_ip(self.speed, 0)
-        # Stay on road
-        if self.rect.left  < ROAD_LEFT:  self.rect.left  = ROAD_LEFT
-        if self.rect.right > ROAD_RIGHT: self.rect.right = ROAD_RIGHT
+    assets["bg"] = load(
+        "assets/AnimatedStreet.png",
+        (W, H)
+    )
 
-    def update_powerups(self):
-        if self.nitro and self.nitro_timer > 0:
-            self.nitro_timer -= 1
-            self.speed = self.base_speed + 5
-            if self.nitro_timer == 0:
-                self.nitro  = False
-                self.speed  = self.base_speed
-        # Draw shield tint when active
-        if self.shield:
-            pygame.draw.rect(self.image, (100, 200, 255, 80),
-                             self.image.get_rect(), 4)
+    assets["player"] = load(
+        "assets/Player.png",
+        (50, 100)
+    )
 
-    def activate_nitro(self):
-        self.nitro       = True
-        self.nitro_timer = 60 * 4   # 4 seconds at 60 fps
+    assets["enemy"] = load(
+        "assets/Enemy.png",
+        (50, 100)
+    )
 
-    def activate_shield(self):
-        self.shield     = True
-        self.shield_hits = 1
+    assets["obstacle"] = load(
+        "assets/obstacle.png",
+        (50, 50)
+    )
 
-    def repair(self):
-        """Repair: re-center the car (clears stuck position)."""
-        self.rect.centerx = SCREEN_WIDTH // 2
-        self.rect.bottom  = SCREEN_HEIGHT - 20
+    assets["coin"] = load(
+        "assets/coin.png",
+        (35, 35)
+    )
 
-class Enemy(pygame.sprite.Sprite):
+    assets["nitro"] = load(
+        "assets/nitro.png",
+        (40, 40)
+    )
 
-    def __init__(self, base_speed=4):
-        super().__init__()
-        self.image = pygame.Surface((40, 70))
-        self.image.fill(RED)
-        pygame.draw.rect(self.image, BLACK, (5,  45, 30, 15))
-        pygame.draw.rect(self.image, BLACK, (0,   5, 10, 15))
-        pygame.draw.rect(self.image, BLACK, (30,  5, 10, 15))
-        pygame.draw.rect(self.image, BLACK, (0,  50, 10, 15))
-        pygame.draw.rect(self.image, BLACK, (30, 50, 10, 15))
+    assets["shield"] = load(
+        "assets/shield.png",
+        (40, 40)
+    )
 
-        self.rect       = self.image.get_rect()
-        self.base_speed = base_speed
-        self.speed      = base_speed
-        self.respawn(safe_y=None)
+    assets["repair"] = load(
+        "assets/repair.png",
+        (40, 40)
+    )
 
-    def respawn(self, safe_y=None):
-        lane = random.randint(0, 2)
-        self.rect.centerx = lane_center(lane)
-        self.rect.top      = random.randint(-400, -80)
+    assets["coin_sound"] = pygame.mixer.Sound(
+        "assets/coin_sound.mp3"
+    )
 
-    def move(self):
-        self.rect.move_ip(0, self.speed)
-        if self.rect.top > SCREEN_HEIGHT:
-            self.respawn(safe_y=None)
+    assets["crash_sound"] = pygame.mixer.Sound(
+        "assets/crash.mp3"
+    )
 
-    def boost(self, amount=1):
-        self.speed = min(self.base_speed + amount, 15)
+    return assets
 
-class Coin(pygame.sprite.Sprite):
-    TYPES = [
-        {"color": BRONZE, "weight": 1, "chance": 0.60},
-        {"color": SILVER, "weight": 2, "chance": 0.30},
-        {"color": GOLD,   "weight": 3, "chance": 0.10},
-    ]
 
-    def __init__(self):
-        super().__init__()
-        self.speed = 3
-        self._make_image()
-        self.rect = self.image.get_rect()
-        self.respawn()
+def reset_game(assets):
 
-    def _pick_type(self):
-        r, cum = random.random(), 0
-        for t in self.TYPES:
-            cum += t["chance"]
-            if r <= cum:
-                return t
-        return self.TYPES[0]
+    return {
 
-    def _make_image(self):
-        ct = self._pick_type()
-        self.weight = ct["weight"]
-        self.image  = pygame.Surface((28, 28), pygame.SRCALPHA)
-        pygame.draw.circle(self.image, ct["color"], (14, 14), 12)
-        pygame.draw.circle(self.image, BLACK, (14, 14), 12, 2)
-        lbl = small_font.render(str(self.weight), True, BLACK)
-        self.image.blit(lbl, lbl.get_rect(center=(14, 14)))
+        "assets": assets,
 
-    def respawn(self):
-        lane = random.randint(0, 2)
-        self.rect.centerx = lane_center(lane)
-        self.rect.top = random.randint(-500, -50)
-        self._make_image()
+        "player": assets["player"].get_rect(
+            center=(200, 450)
+        ),
 
-    def move(self):
-        self.rect.move_ip(0, self.speed)
-        if self.rect.top > SCREEN_HEIGHT:
-            self.respawn()
+        "enemy": assets["enemy"].get_rect(
+            center=(random.choice(LANES), -100)
+        ),
 
-class Obstacle(pygame.sprite.Sprite):
-    """
-    type = 'oil'     — slows player for 2 seconds
-    type = 'barrier' — instant crash (like enemy)
-    type = 'bump'    — cosmetic / slows briefly
-    type = 'nitro'   — (handled separately; not an obstacle)
-    """
-    TYPES = ["oil", "barrier", "bump"]
+        "obstacles": [],
+        "coins": [],
+        "powerups": [],
 
-    def __init__(self, speed=4):
-        super().__init__()
-        self.kind  = random.choice(self.TYPES)
-        self.speed = speed
-        self.image = pygame.Surface((44, 22), pygame.SRCALPHA)
-        self._draw()
-        self.rect = self.image.get_rect()
-        self.respawn()
+        "active_power": None,
+        "power_timer": 0,
 
-    def _draw(self):
-        self.image.fill((0, 0, 0, 0))
-        if self.kind == "oil":
-            pygame.draw.ellipse(self.image, (30, 30, 80, 200), (0, 0, 44, 22))
-            lbl = small_font.render("OIL", True, WHITE)
-            self.image.blit(lbl, lbl.get_rect(center=(22, 11)))
-        elif self.kind == "barrier":
-            pygame.draw.rect(self.image, ORANGE, (0, 0, 44, 22), border_radius=4)
-            lbl = small_font.render("STOP", True, BLACK)
-            self.image.blit(lbl, lbl.get_rect(center=(22, 11)))
-        elif self.kind == "bump":
-            pygame.draw.ellipse(self.image, GRAY, (0, 4, 44, 14))
-            lbl = small_font.render("BUMP", True, BLACK)
-            self.image.blit(lbl, lbl.get_rect(center=(22, 11)))
+        "speed": 5,
+        "player_speed": 5,
 
-    def respawn(self):
-        lane = random.randint(0, 2)
-        self.rect.centerx = lane_center(lane)
-        self.rect.top = random.randint(-600, -100)
-        self.kind = random.choice(self.TYPES)
-        self._draw()
+        "bg1": 0,
+        "bg2": -600,
 
-    def move(self):
-        self.rect.move_ip(0, self.speed)
-        if self.rect.top > SCREEN_HEIGHT:
-            self.respawn()
+        "score": 0,
+        "coins_collected":0,
+        "distance": 0
+    }
 
-class PowerUp(pygame.sprite.Sprite):
-    TYPES = ["nitro", "shield", "repair"]
 
-    def __init__(self, speed=3):
-        super().__init__()
-        self.kind   = random.choice(self.TYPES)
-        self.speed  = speed
-        self.timer  = 300   # disappear after 300 frames (~5 s)
-        self.image  = pygame.Surface((34, 34), pygame.SRCALPHA)
-        self._draw()
-        self.rect = self.image.get_rect()
-        self.respawn()
+def spawn_coin(g):
 
-    def _draw(self):
-        self.image.fill((0, 0, 0, 0))
-        colors = {"nitro": (255, 140, 0), "shield": (0, 200, 255), "repair": (0, 220, 80)}
-        labels = {"nitro": "N", "shield": "S", "repair": "R"}
-        pygame.draw.rect(self.image, colors[self.kind], (0, 0, 34, 34), border_radius=6)
-        pygame.draw.rect(self.image, WHITE, (0, 0, 34, 34), 2, border_radius=6)
-        lbl = small_font.render(labels[self.kind], True, WHITE)
-        self.image.blit(lbl, lbl.get_rect(center=(17, 17)))
+    rect = pygame.Rect(
+        random.choice(LANES),
+        -100,
+        35,
+        35
+    )
 
-    def respawn(self):
-        lane = random.randint(0, 2)
-        self.rect.centerx = lane_center(lane)
-        self.rect.top = random.randint(-700, -200)
-        self.kind  = random.choice(self.TYPES)
-        self.timer = 300
-        self._draw()
+    value=random.choice([1,3,5])
 
-    def move(self):
-        self.rect.move_ip(0, self.speed)
-        self.timer -= 1
-        if self.rect.top > SCREEN_HEIGHT or self.timer <= 0:
-            self.respawn()
+    g["coins"].append({
+        "rect": rect,
+        "value":value
+    })
+
+
+def spawn_power(g):
+
+    types = ["nitro", "shield", "repair"]
+
+    rect = pygame.Rect(
+        random.choice(LANES),
+        -100,
+        40,
+        40
+    )
+
+    g["powerups"].append(
+        {
+            "type": random.choice(types),
+            "rect": rect
+        }
+    )
+
+
+def update_game(g):
+
+    a = g["assets"]
+
+    keys = pygame.key.get_pressed()
+
+    # движение игрока
+
+    if keys[pygame.K_LEFT] and g["player"].left > 0:
+        g["player"].x -= g["player_speed"]
+
+    if keys[pygame.K_RIGHT] and g["player"].right < 400:
+        g["player"].x += g["player_speed"]
+
+    # дистанция
+
+    g["distance"] += 0.05
+
+    # движение дороги
+
+    g["bg1"] += g["speed"]
+    g["bg2"] += g["speed"]
+
+    if g["bg1"] >= 600:
+        g["bg1"] = -600
+
+    if g["bg2"] >= 600:
+        g["bg2"] = -600
+
+    # ---------------- ENEMY ----------------
+
+    g["enemy"].y += g["speed"]+1
+
+    if g["player"].colliderect(g["enemy"]):
+        return "game_over"
+
+    if g["enemy"].top > 600:
+
+        g["enemy"].center = (
+            random.choice(LANES),
+            -100
+        )
+
+        g["score"] += 1
+
+    # ---------------- SPAWN ----------------
+
+    if random.randint(1, 100) < 2:
+        spawn_coin(g)
+
+    if random.randint(1, 200) < 2:
+        spawn_power(g)
+
+    if random.randint(1, 120) < 2:
+
+        rect = pygame.Rect(
+            random.choice(LANES),
+            -100,
+            50,
+            50
+        )
+
+        g["obstacles"].append(rect)
+
+    # ---------------- COINS ----------------
+
+    for c in g["coins"][:]:
+
+        c["rect"].y += g["speed"]
+
+        if g["player"].colliderect(c["rect"]):
+
+            a["coin_sound"].play()
+
+            g["score"] += c["value"]
+
+            g["coins_collected"]+=1
+
+            g["coins"].remove(c)
+
+        elif c["rect"].top > 600:
+
+            g["coins"].remove(c)
+
+    # ---------------- POWERUPS ----------------
+
+    for p in g["powerups"][:]:
+
+        p["rect"].y += g["speed"]
+
+        if g["player"].colliderect(p["rect"]):
+
+            g["active_power"] = p["type"]
+
+            if p["type"] == "nitro":
+
+                g["speed"] += 3
+                g["player_speed"] = 8
+
+                g["power_timer"] = 300
+
+            if p["type"] == "shield":
+
+                g["power_timer"] = 999
+
+            if p["type"] == "repair":
+
+                g["obstacles"].clear()
+
+            g["powerups"].remove(p)
+
+        elif p["rect"].top > 600:
+
+            g["powerups"].remove(p)
+
+    # ---------------- OBSTACLES ----------------
+
+    for o in g["obstacles"][:]:
+
+        o.y += g["speed"]
+
+        if g["player"].colliderect(o):
+
+            if g["active_power"] == "shield":
+
+                g["active_power"] = None
+                g["obstacles"].remove(o)
+
+            else:
+
+                return "game_over"
+
+        elif o.top > 600:
+
+            g["obstacles"].remove(o)
+
+    # ускорение каждые 5 монет
+
+    if g["coins_collected"] % 5 == 0 and g["coins_collected"] != 0:
+        g["speed"] += 0.02
+
+    # ---------------- TIMER ----------------
+
+    if g["power_timer"] > 0:
+
+        g["power_timer"] -= 1
+
+        if g["power_timer"] == 0:
+
+            if g["active_power"] == "nitro":
+
+                g["speed"] -= 3
+                g["player_speed"] = 5
+
+            g["active_power"] = None
+
+
+def draw_game(screen, g):
+
+    a = g["assets"]
+
+    screen.blit(a["bg"], (0, g["bg1"]))
+    screen.blit(a["bg"], (0, g["bg2"]))
+
+    screen.blit(a["player"], g["player"])
+    screen.blit(a["enemy"], g["enemy"])
+
+    for o in g["obstacles"]:
+        screen.blit(a["obstacle"], o)
+
+    for c in g["coins"]:
+        screen.blit(a["coin"], c["rect"])
+
+    for p in g["powerups"]:
+
+        if p["type"] == "nitro":
+            img = a["nitro"]
+
+        elif p["type"] == "shield":
+            img = a["shield"]
+
+        else:
+            img = a["repair"]
+
+        screen.blit(img, p["rect"])
+
+    font = pygame.font.SysFont("Verdana", 18)
+
+    screen.blit(
+        font.render(
+            f"Score: {g['score']}",
+            True,
+            (0, 0, 0)
+        ),
+        (10, 10)
+    )
+    screen.blit(
+    font.render(
+        f"Coins: {g['coins_collected']}",
+        True,
+        (0, 0, 0)
+    ),
+    (10, 100)
+)
+
+    screen.blit(
+        font.render(
+            f"Distance: {int(g['distance'])}",
+            True,
+            (0, 0, 0)
+        ),
+        (10, 40)
+    )
+
+    screen.blit(
+        font.render(
+            f"Power: {g['active_power']}",
+            True,
+            (0, 0, 0)
+        ),
+        (10, 70)
+    )

@@ -1,359 +1,205 @@
-
 import pygame
-import sys
-from datetime import datetime
-import tools
-SCREEN_WIDTH  = 1000
-SCREEN_HEIGHT = 680
-CANVAS_HEIGHT = 540
-UI_HEIGHT     = 140
-FPS           = 60
-WHITE      = (255, 255, 255)
-BLACK      = (0,   0,   0  )
-GRAY       = (200, 200, 200)
-DARK_GRAY  = (100, 100, 100)
-LIGHT_BLUE = (150, 200, 255)
-RED        = (255, 0,   0  )
+import math
+import datetime
 
-COLORS = [
-    BLACK,
-    WHITE,
-    (255, 0,   0  ),   # Red
-    (0,   200, 0  ),   # Green
-    (0,   0,   255),   # Blue
-    (255, 255, 0  ),   # Yellow
-    (255, 165, 0  ),   # Orange
-    (128, 0,   128),   # Purple
-    (255, 192, 203),   # Pink
-    (0,   255, 255),   # Cyan
-    (139, 69,  19 ),   # Brown
-    (128, 128, 128),   # Gray
-]
-BRUSH_SIZES = {1: 2, 2: 5, 3: 10}
+# Инициализация
 pygame.init()
-screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-pygame.display.set_caption("Paint — TSIS 2")
+
+WIDTH, HEIGHT = 900, 500
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+GRAY = (200, 200, 200)
+toolbar_height = 120
+
+screen = pygame.display.set_mode((WIDTH, HEIGHT + toolbar_height))
+pygame.display.set_caption("Paint TSIS 2 - Fixed")
+
+canvas = pygame.Surface((WIDTH, HEIGHT))
+canvas.fill(WHITE)
+
+FONT = pygame.font.SysFont("Arial", 18)
+TEXT_FONT = pygame.font.SysFont("Arial", 24)
+
+# Переменные состояния
 clock = pygame.time.Clock()
-font       = pygame.font.SysFont("Arial", 14)
-font_bold  = pygame.font.SysFont("Arial", 14, bold=True)
-text_font  = pygame.font.SysFont("Arial", 24)   # font used on canvas
+running = True
+drawing = False
+mode = "pen"
+color = BLACK
+brush_size = 5
+start_pos = (0, 0)
+last_pos = (0, 0)
 
-class PaintApp:
+# Текст
+text_active = False
+text_content = ""
+text_pos = (0, 0)
 
-    def __init__(self):
-        self.canvas = pygame.Surface((SCREEN_WIDTH, CANVAS_HEIGHT))
-        self.canvas.fill(WHITE)
+# ================= UNDO / REDO =================
+undo_stack = []
+redo_stack = []
 
-        self.tool          = 'pencil'
-        self.color         = BLACK
-        self.brush_size    = 2          
-        self.size_level    = 1          
+def save_state():
+    undo_stack.append(canvas.copy())
+    if len(undo_stack) > 30: undo_stack.pop(0)
+    redo_stack.clear()
 
-        # Shape / line drawing state
-        self.drawing       = False
-        self.start_pos     = None
-        self.prev_pos      = None       
-        self.temp_surface  = None       
+def undo():
+    if undo_stack:
+        redo_stack.append(canvas.copy())
+        last = undo_stack.pop()
+        canvas.blit(last, (0, 0))
 
-        # Text tool state
-        self.text_mode     = False
-        self.text_pos      = None
-        self.text_buffer   = ""
+def redo():
+    if redo_stack:
+        undo_stack.append(canvas.copy())
+        last = redo_stack.pop()
+        canvas.blit(last, (0, 0))
 
-        self.tool_buttons  = {}
-        self.color_buttons = []
-        self.size_buttons  = {}
-        self._build_ui()
+# ================= ИНСТРУМЕНТЫ =================
 
-    def _build_ui(self):
-        btn_w, btn_h = 72, 30
-        row1_y = CANVAS_HEIGHT + 10
-        row2_y = CANVAS_HEIGHT + 50
+def flood_fill(surface, x, y, new_color):
+    target_color = surface.get_at((x, y))
+    if target_color == new_color: return
+    stack = [(x, y)]
+    while stack:
+        cx, cy = stack.pop()
+        if 0 <= cx < WIDTH and 0 <= cy < HEIGHT:
+            if surface.get_at((cx, cy)) == target_color:
+                surface.set_at((cx, cy), new_color)
+                stack.extend([(cx+1, cy), (cx-1, cy), (cx, cy+1), (cx, cy-1)])
 
-        # Row 1 — drawing tools
-        tools_row1 = [
-            ('pencil',    'Pencil'),
-            ('line',      'Line'),
-            ('brush',     'Brush'),
-            ('eraser',    'Eraser'),
-            ('fill',      'Fill'),
-            ('text',      'Text'),
-            ('clear',     'Clear'),
-        ]
-        for i, (tid, label) in enumerate(tools_row1):
-            x = 10 + i * (btn_w + 6)
-            self.tool_buttons[tid] = {
-                'rect':  pygame.Rect(x, row1_y, btn_w, btn_h),
-                'label': label,
-            }
+def draw_shape(surface, mode, color, start, end, size):
+    if mode == "line":
+        pygame.draw.line(surface, color, start, end, size)
+    elif mode == "rect":
+        x, y = min(start[0], end[0]), min(start[1], end[1])
+        w, h = abs(start[0] - end[0]), abs(start[1] - end[1])
+        pygame.draw.rect(surface, color, (x, y, w, h), size)
+    elif mode == "circle":
+        r = int(math.hypot(end[0]-start[0], end[1]-start[1]))
+        pygame.draw.circle(surface, color, start, r, size)
+    elif mode == "square":
+        side = min(abs(end[0]-start[0]), abs(end[1]-start[1]))
+        x = start[0] if end[0] > start[0] else start[0] - side
+        y = start[1] if end[1] > start[1] else start[1] - side
+        pygame.draw.rect(surface, color, (x, y, side, side), size)
+    elif mode == "right_tri":
+        pygame.draw.polygon(surface, color, [start, (start[0], end[1]), end], size)
+    elif mode == "rhombus":
+        mx, my = (start[0]+end[0])//2, (start[1]+end[1])//2
+        pts = [(mx, start[1]), (end[0], my), (mx, end[1]), (start[0], my)]
+        pygame.draw.polygon(surface, color, pts, size)
 
-        # Row 2 — shape tools
-        tools_row2 = [
-            ('rectangle',  'Rect'),
-            ('square',     'Square'),
-            ('circle',     'Circle'),
-            ('right_tri',  'R-Tri'),
-            ('eq_tri',     'E-Tri'),
-            ('rhombus',    'Rhombus'),
-        ]
-        for i, (tid, label) in enumerate(tools_row2):
-            x = 10 + i * (btn_w + 6)
-            self.tool_buttons[tid] = {
-                'rect':  pygame.Rect(x, row2_y, btn_w, btn_h),
-                'label': label,
-            }
+# ================= ПАНЕЛЬ УПРАВЛЕНИЯ =================
 
-        # Brush-size buttons (top-right area)
-        size_labels = {1: 'S(1)', 2: 'M(2)', 3: 'L(3)'}
-        for lvl, label in size_labels.items():
-            x = SCREEN_WIDTH - 210 + (lvl - 1) * 68
-            self.size_buttons[lvl] = {
-                'rect':  pygame.Rect(x, row1_y, 62, 30),
-                'label': label,
-            }
+colors_palette = [
+    (0,0,0), (255,0,0), (0,255,0), (0,0,255), 
+    (255,255,0), (255,165,0), (128,0,128), (255,255,255)
+]
+color_rects = []
+for i, c in enumerate(colors_palette):
+    color_rects.append((c, pygame.Rect(10 + i*35, HEIGHT + 75, 30, 30)))
 
-        # Color palette — two rows on the right side
-        c_size = 28
-        cx_start = SCREEN_WIDTH - 210
-        cy_start = CANVAS_HEIGHT + 52
-        for i, c in enumerate(COLORS):
-            x = cx_start + (i % 6) * (c_size + 4)
-            y = cy_start + (i // 6) * (c_size + 4)
-            self.color_buttons.append({
-                'rect':  pygame.Rect(x, y, c_size, c_size),
-                'color': c,
-            })
+def draw_ui():
+    pygame.draw.rect(screen, GRAY, (0, HEIGHT, WIDTH, toolbar_height))
+    msg = f"Mode: {mode.upper()} | Size: {brush_size} | Color: {color}"
+    screen.blit(FONT.render(msg, True, BLACK), (10, HEIGHT + 5))
+    
+    tools_msg = "P: Pen | L: Line | R: Rect | C: Circle | S: Square | T: Tri | H: Rhombus | F: Fill | X: Text | E: Eraser"
+    screen.blit(FONT.render(tools_msg, True, BLACK), (10, HEIGHT + 25))
+    
+    edit_msg = "1, 2, 3: Sizes | Ctrl+Z: Undo | Ctrl+Y: Redo | Ctrl+S: Save"
+    screen.blit(FONT.render(edit_msg, True, BLACK), (10, HEIGHT + 45))
 
-    def _draw_ui(self):
-        pygame.draw.rect(screen, GRAY, (0, CANVAS_HEIGHT, SCREEN_WIDTH, UI_HEIGHT))
-        pygame.draw.line(screen, DARK_GRAY, (0, CANVAS_HEIGHT), (SCREEN_WIDTH, CANVAS_HEIGHT), 2)
+    for c_val, rect in color_rects:
+        pygame.draw.rect(screen, c_val, rect)
+        pygame.draw.rect(screen, BLACK, rect, 1)
+        if color == c_val:
+            pygame.draw.rect(screen, (0, 255, 255), rect, 3)
 
-        # Tool buttons
-        for tid, data in self.tool_buttons.items():
-            rect = data['rect']
-            bg = LIGHT_BLUE if tid == self.tool else WHITE
-            pygame.draw.rect(screen, bg, rect)
-            pygame.draw.rect(screen, BLACK, rect, 2)
-            lbl = font.render(data['label'], True, BLACK)
-            screen.blit(lbl, lbl.get_rect(center=rect.center))
+# ================= ЦИКЛ ИГРЫ =================
 
-        # Size buttons
-        for lvl, data in self.size_buttons.items():
-            rect = data['rect']
-            bg = LIGHT_BLUE if lvl == self.size_level else WHITE
-            pygame.draw.rect(screen, bg, rect)
-            pygame.draw.rect(screen, BLACK, rect, 2)
-            lbl = font_bold.render(data['label'], True, BLACK)
-            screen.blit(lbl, lbl.get_rect(center=rect.center))
+while running:
+    screen.fill(WHITE)
+    screen.blit(canvas, (0, 0))
+    
+    if drawing and mode not in ["pen", "eraser", "fill", "text"]:
+        draw_shape(screen, mode, color, start_pos, pygame.mouse.get_pos(), brush_size)
+    
+    if text_active:
+        screen.blit(TEXT_FONT.render(text_content + "|", True, color), text_pos)
 
-        # Color palette
-        for cb in self.color_buttons:
-            rect = cb['rect']
-            pygame.draw.rect(screen, cb['color'], rect)
-            pygame.draw.rect(screen, BLACK, rect, 1)
-            if cb['color'] == self.color:
-                pygame.draw.rect(screen, RED, rect, 3)
+    draw_ui()
 
-        # Status line
-        status = f"Tool: {self.tool}   Size: {self.brush_size}px   Ctrl+S = Save"
-        if self.text_mode:
-            status = "TEXT MODE — type, Enter=confirm, Esc=cancel"
-        lbl = font.render(status, True, DARK_GRAY)
-        screen.blit(lbl, (10, CANVAS_HEIGHT + 90 + 28))
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
 
-    def _handle_ui_click(self, pos):
-        # Tool buttons
-        for tid, data in self.tool_buttons.items():
-            if data['rect'].collidepoint(pos):
-                if tid == 'clear':
-                    self.canvas.fill(WHITE)
+        if event.type == pygame.KEYDOWN:
+            ctrl_pressed = pygame.key.get_mods() & pygame.KMOD_CTRL
+            
+            if text_active:
+                if event.key == pygame.K_RETURN:
+                    canvas.blit(TEXT_FONT.render(text_content, True, color), text_pos)
+                    text_active = False
+                elif event.key == pygame.K_ESCAPE: text_active = False
+                elif event.key == pygame.K_BACKSPACE: text_content = text_content[:-1]
+                else: text_content += event.unicode
+            else:
+                # ГОРЯЧИЕ КЛАВИШИ КОМБИНАЦИЙ (CTRL + ...)
+                if ctrl_pressed:
+                    if event.key in [pygame.K_s]: # СОХРАНЕНИЕ
+                        fname = f"paint_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+                        pygame.image.save(canvas, fname)
+                        print(f"Изображение сохранено как: {fname}")
+                    elif event.key in [pygame.K_z]:
+                        undo()
+                    elif event.key in [pygame.K_y]:
+                        redo()
+                
+                # ГОРЯЧИЕ КЛАВИШИ РЕЖИМОВ
                 else:
-                    self.tool = tid
-                    # Exit text mode if switching away
-                    if tid != 'text':
-                        self._cancel_text()
-                return True
+                    if event.key == pygame.K_p: mode = "pen"
+                    elif event.key == pygame.K_l: mode = "line"
+                    elif event.key == pygame.K_r: mode = "rect"
+                    elif event.key == pygame.K_c: mode = "circle"
+                    elif event.key == pygame.K_s: mode = "square"
+                    elif event.key == pygame.K_t: mode = "right_tri"
+                    elif event.key == pygame.K_h: mode = "rhombus"
+                    elif event.key == pygame.K_f: mode = "fill"
+                    elif event.key == pygame.K_x: mode = "text"
+                    elif event.key == pygame.K_e: mode = "eraser"
+                    elif event.key == pygame.K_1: brush_size = 2
+                    elif event.key == pygame.K_2: brush_size = 5
+                    elif event.key == pygame.K_3: brush_size = 10
 
-        # Size buttons
-        for lvl, data in self.size_buttons.items():
-            if data['rect'].collidepoint(pos):
-                self.size_level = lvl
-                self.brush_size = BRUSH_SIZES[lvl]
-                return True
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if event.pos[1] < HEIGHT:
+                save_state()
+                if mode == "fill": flood_fill(canvas, event.pos[0], event.pos[1], color)
+                elif mode == "text":
+                    text_active, text_pos, text_content = True, event.pos, ""
+                else:
+                    drawing, start_pos, last_pos = True, event.pos, event.pos
+            else:
+                for c_val, rect in color_rects:
+                    if rect.collidepoint(event.pos): color = c_val
 
-        # Color buttons
-        for cb in self.color_buttons:
-            if cb['rect'].collidepoint(pos):
-                self.color = cb['color']
-                if self.tool == 'eraser':
-                    self.tool = 'pencil'
-                return True
+        if event.type == pygame.MOUSEBUTTONUP:
+            if drawing:
+                if mode not in ["pen", "eraser"]:
+                    draw_shape(canvas, mode, color, start_pos, event.pos, brush_size)
+                drawing = False
 
-        return False
+        if event.type == pygame.MOUSEMOTION and drawing:
+            if mode == "pen":
+                pygame.draw.line(canvas, color, last_pos, event.pos, brush_size)
+                last_pos = event.pos
+            elif mode == "eraser":
+                pygame.draw.circle(canvas, WHITE, event.pos, brush_size * 2)
 
-    def _cancel_text(self):
-        self.text_mode   = False
-        self.text_pos    = None
-        self.text_buffer = ""
+    pygame.display.flip()
+    clock.tick(60)
 
-    def _confirm_text(self):
-        if self.text_pos and self.text_buffer:
-            rendered = text_font.render(self.text_buffer, True, self.color)
-            self.canvas.blit(rendered, self.text_pos)
-        self._cancel_text()
-
-    def _draw_text_cursor(self):
-        """Show live text preview on screen (not burned into canvas yet)."""
-        if not self.text_mode or self.text_pos is None:
-            return
-        preview = text_font.render(self.text_buffer + "|", True, self.color)
-        screen.blit(preview, self.text_pos)
-
-    SHAPE_TOOLS = {'rectangle', 'square', 'circle',
-                   'right_tri', 'eq_tri', 'rhombus', 'line'}
-
-    def _draw_shape_preview(self, end):
-        self.canvas.blit(self.temp_surface, (0, 0))
-        s = self.brush_size
-        c = self.color
-        st = self.start_pos
-
-        if   self.tool == 'line':       tools.draw_straight_line(self.canvas, st, end, c, s)
-        elif self.tool == 'rectangle':  tools.draw_rectangle(self.canvas, st, end, c, s)
-        elif self.tool == 'square':     tools.draw_square(self.canvas, st, end, c, s)
-        elif self.tool == 'circle':     tools.draw_circle(self.canvas, st, end, c, s)
-        elif self.tool == 'right_tri':  tools.draw_right_triangle(self.canvas, st, end, c, s)
-        elif self.tool == 'eq_tri':     tools.draw_equilateral_triangle(self.canvas, st, end, c, s)
-        elif self.tool == 'rhombus':    tools.draw_rhombus(self.canvas, st, end, c, s)
-
-    def _save(self):
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename  = f"canvas_{timestamp}.png"
-        pygame.image.save(self.canvas, filename)
-        print(f"Saved: {filename}")
-        # Flash a small message on screen
-        msg = font_bold.render(f"Saved as {filename}", True, BLACK)
-        screen.blit(msg, (10, 10))
-        pygame.display.flip()
-        pygame.time.wait(800)
-
-    def run(self):
-        running = True
-        while running:
-            for event in pygame.event.get():
-
-                # ── Quit ──────────────────────────────────
-                if event.type == pygame.QUIT:
-                    running = False
-
-                # ── Keyboard ──────────────────────────────
-                if event.type == pygame.KEYDOWN:
-
-                    # Text mode input
-                    if self.text_mode:
-                        if event.key == pygame.K_RETURN:
-                            self._confirm_text()
-                        elif event.key == pygame.K_ESCAPE:
-                            self._cancel_text()
-                        elif event.key == pygame.K_BACKSPACE:
-                            self.text_buffer = self.text_buffer[:-1]
-                        else:
-                            if event.unicode and event.unicode.isprintable():
-                                self.text_buffer += event.unicode
-                        continue   
-
-                    # Global shortcuts
-                    if event.key == pygame.K_ESCAPE:
-                        running = False
-
-                    # Ctrl + S  →  save
-                    if event.key == pygame.K_s and (pygame.key.get_mods() & pygame.KMOD_CTRL):
-                        self._save()
-
-                    if event.key == pygame.K_1:
-                        self.size_level = 1;  self.brush_size = BRUSH_SIZES[1]
-                    if event.key == pygame.K_2:
-                        self.size_level = 2;  self.brush_size = BRUSH_SIZES[2]
-                    if event.key == pygame.K_3:
-                        self.size_level = 3;  self.brush_size = BRUSH_SIZES[3]
-
-                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    pos = event.pos
-
-                    # Click in UI bar
-                    if pos[1] >= CANVAS_HEIGHT:
-                        self._handle_ui_click(pos)
-                        continue
-
-                    # ── Text tool ──────────────────────────
-                    if self.tool == 'text':
-                        # Confirm previous if any, start new
-                        self._confirm_text()
-                        self.text_mode   = True
-                        self.text_pos    = pos
-                        self.text_buffer = ""
-                        continue
-
-                    # ── Fill tool ──────────────────────────
-                    if self.tool == 'fill':
-                        tools.flood_fill(self.canvas, pos, self.color)
-                        continue
-
-                    # ── Brush / pencil / eraser ────────────
-                    if self.tool in ('brush', 'pencil', 'eraser'):
-                        draw_color = WHITE if self.tool == 'eraser' else self.color
-                        tools.draw_brush(self.canvas, pos, draw_color, self.brush_size)
-                        self.prev_pos = pos
-                        self.drawing  = True
-                        continue
-
-                    # ── Shape / line tools ─────────────────
-                    if self.tool in self.SHAPE_TOOLS:
-                        self.start_pos    = pos
-                        self.temp_surface = self.canvas.copy()
-                        self.drawing      = True
-
-                # ── Mouse motion ──────────────────────────
-                if event.type == pygame.MOUSEMOTION:
-                    if not self.drawing:
-                        continue
-                    pos = event.pos
-                    if pos[1] >= CANVAS_HEIGHT:
-                        continue
-
-                    if self.tool in ('brush', 'pencil'):
-                        if self.prev_pos:
-                            tools.draw_pencil_line(self.canvas, self.prev_pos, pos,
-                                                   self.color, self.brush_size)
-                        self.prev_pos = pos
-
-                    elif self.tool == 'eraser':
-                        tools.draw_brush(self.canvas, pos, WHITE, self.brush_size * 3)
-                        self.prev_pos = pos
-
-                    elif self.tool in self.SHAPE_TOOLS:
-                        self._draw_shape_preview(pos)
-
-                # ── Mouse button up ────────────────────────
-                if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-                    if self.tool in self.SHAPE_TOOLS and self.drawing:
-                        # Finalise shape at release position
-                        self._draw_shape_preview(event.pos)
-                    self.drawing      = False
-                    self.start_pos    = None
-                    self.temp_surface = None
-                    self.prev_pos     = None
-
-            # ── Render ────────────────────────────────────
-            screen.blit(self.canvas, (0, 0))
-            self._draw_ui()
-            self._draw_text_cursor()
-
-            pygame.display.flip()
-            clock.tick(FPS)
-
-        pygame.quit()
-        sys.exit()
-
-if __name__ == "__main__":
-    PaintApp().run()
+pygame.quit()
